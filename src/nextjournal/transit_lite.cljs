@@ -58,10 +58,10 @@
 ;; Reader
 ;;
 ;; Transit uses a circular string cache to compress repeated tagged values.
-;; Cache refs are "^X" where X is a char at ASCII offset 33 from the index.
+;; Cache refs are "^X" where X is a char at ASCII offset 48 ('0') from the index.
 
 (def ^:private CACHE-SIZE 88)
-(def ^:private BASE-CHAR  33)
+(def ^:private BASE-CHAR  48)
 
 (defn- new-cache [] #js {:d (js/Array. CACHE-SIZE) :n 0})
 
@@ -91,7 +91,7 @@
                       s)
                     s)]
       (when (and (> (.-length s) 2)
-                 (or as-map-key? (not= "~" (.charAt s 1))))
+                 (or as-map-key? (= "~" (.charAt s 0))))
         (cache-put! cache decoded))
       decoded)))
 
