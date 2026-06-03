@@ -76,7 +76,7 @@
   (set! (.-n c) (+ (.-n c) 1))
   v)
 
-(declare decode)
+(declare decode decode-tag)
 
 (defn- decode-str [s cache as-map-key?]
   (if (cache-ref? s)
@@ -96,37 +96,45 @@
       decoded)))
 
 (defn- decode-array [a cache]
-  (if (= "^ " (aget a 0))
-    ;; transit map
-    (loop [i 1 ret (transient {})]
-      (if (< i (.-length a))
-        (recur (+ i 2)
-               (-assoc! ret
-                       (decode-str (aget a i) cache true)
-                       (decode (aget a (+ i 1)) cache)))
-        (persistent! ret)))
-    ;; vector
-    (loop [i 0 ret (transient [])]
-      (if (< i (.-length a))
-        (recur (+ i 1) (conj! ret (decode (aget a i) cache)))
-        (persistent! ret)))))
+  (let [fst (aget a 0)]
+    (cond
+      (= "^ " fst)
+      ;; transit map
+      (loop [i 1 ret (transient {})]
+        (if (< i (.-length a))
+          (recur (+ i 2)
+                 (-assoc! ret
+                         (decode-str (aget a i) cache true)
+                         (decode (aget a (+ i 1)) cache)))
+          (persistent! ret)))
+      (and (string? fst) (= "~" (.charAt fst 0)) (= "#" (.charAt fst 1)))
+      ;; tagged value encoded as array: ["~#tag", value]
+      (decode-tag fst (aget a 1) cache)
+      :else
+      ;; vector
+      (loop [i 0 ret (transient [])]
+        (if (< i (.-length a))
+          (recur (+ i 1) (conj! ret (decode (aget a i) cache)))
+          (persistent! ret))))))
+
+(defn- decode-tag [tag val cache]
+  (case tag
+    "~#set"       (reduce conj #{} (decode val cache))
+    "~#list"      (into () (.reverse (decode val cache)))
+    "~#with-meta" (with-meta (decode (aget val 0) cache)
+                             (decode (aget val 1) cache))
+    "~#cmap"      (loop [i 0 ret (transient {})]
+                    (if (< i (.-length val))
+                      (recur (+ i 2)
+                             (-assoc! ret
+                                     (decode (aget val i) cache)
+                                     (decode (aget val (+ i 1)) cache)))
+                      (persistent! ret)))
+    (throw (js/Error. (str "transit-lite: unknown tag " tag)))))
 
 (defn- decode-tagged [obj cache]
-  (let [tag (aget (js/Object.keys obj) 0)
-        val (aget obj tag)]
-    (case tag
-      "~#set"       (reduce conj #{} (decode val cache))
-      "~#list"      (into () (.reverse (decode val cache)))
-      "~#with-meta" (with-meta (decode (aget val 0) cache)
-                               (decode (aget val 1) cache))
-      "~#cmap"      (loop [i 0 ret (transient {})]
-                      (if (< i (.-length val))
-                        (recur (+ i 2)
-                               (-assoc! ret
-                                       (decode (aget val i) cache)
-                                       (decode (aget val (+ i 1)) cache)))
-                        (persistent! ret)))
-      (throw (js/Error. (str "transit-lite: unknown tag " tag))))))
+  (let [tag (aget (js/Object.keys obj) 0)]
+    (decode-tag tag (aget obj tag) cache)))
 
 (defn decode [x cache]
   (cond
