@@ -9,8 +9,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Writer
 
-(declare encode)
-
 (defn- encode-str [s]
   (let [c (.charAt s 0)]
     (if (or (= "~" c) (= "^" c)) (str "~" s) s)))
@@ -120,7 +118,7 @@
 (defn- decode-tag [tag val cache]
   (case tag
     "~#set"       (reduce conj #{} (decode val cache))
-    "~#list"      (into () (.reverse (decode val cache)))
+    "~#list"      (apply list (decode val cache))
     "~#with-meta" (with-meta (decode (aget val 0) cache)
                              (decode (aget val 1) cache))
     "~#cmap"      (loop [i 0 ret (transient {})]
