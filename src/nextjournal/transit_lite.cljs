@@ -88,8 +88,10 @@
                       "^" (.substring s 1)
                       s)
                     s)]
-      (when (and (> (.-length s) 2)
-                 (or as-map-key? (= "~" (.charAt s 0))))
+      (when (and (>= (.-length s) 4)
+                 (or as-map-key?
+                     (let [c (.charAt s 1)]
+                       (or (= ":" c) (= "$" c)))))
         (cache-put! cache decoded))
       decoded)))
 
@@ -107,7 +109,9 @@
           (persistent! ret)))
       (and (string? fst) (= "~" (.charAt fst 0)) (= "#" (.charAt fst 1)))
       ;; tagged value encoded as array: ["~#tag", value]
-      (decode-tag fst (aget a 1) cache)
+      ;; cache the tag string to keep counter aligned with transit-java writer
+      (do (cache-put! cache fst)
+          (decode-tag fst (aget a 1) cache))
       :else
       ;; vector
       (loop [i 0 ret (transient [])]

@@ -89,6 +89,25 @@
     (is (= data (roundtrip data)))))
 
 ;; ---------------------------------------------------------------------------
+;; Cache alignment — transit-java wire format (array form for tagged values)
+;;
+;; transit-lite's writer emits no cache refs, so roundtrip tests never exercise
+;; cache slot alignment. These tests use hand-crafted transit-java wire JSON.
+
+(deftest test-cache-set-tag-alignment
+  ;; transit-java writes sets as ["~#set", [...]] and caches the "~#set" tag
+  ;; string. The reader must do the same or subsequent cache refs are off by one.
+  ;; cache: [0]=:abc  [1]="~#set"  [2]=:key  — "^2" must resolve to :key
+  (is (= {:abc #{:key} :key 42}
+         (tx/read-str "[\"^ \",\"~:abc\",[\"~#set\",[\"~:key\"]],\"^2\",42]"))))
+
+(deftest test-cache-list-tag-alignment
+  ;; Same issue with "~#list".
+  ;; cache: [0]=:abc  [1]="~#list"  [2]=:key  — "^2" must resolve to :key
+  (is (= {:abc '(:key) :key 42}
+         (tx/read-str "[\"^ \",\"~:abc\",[\"~#list\",[\"~:key\"]],\"^2\",42]"))))
+
+;; ---------------------------------------------------------------------------
 
 (defn -main [& _]
   (run-tests 'nextjournal.transit-lite-test))

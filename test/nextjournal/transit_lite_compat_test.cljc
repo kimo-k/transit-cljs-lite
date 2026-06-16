@@ -53,7 +53,11 @@
 
    {:desc     "namespaced keyword keys"
     :expected {:ns/a 1 :ns/b 2 :other/a 3}
-    :encoded  "[\"^ \",\"~:ns/a\",1,\"~:ns/b\",2,\"~:other/a\",3]"}])
+    :encoded  "[\"^ \",\"~:ns/a\",1,\"~:ns/b\",2,\"~:other/a\",3]"}
+
+   {:desc     "uuid value must not occupy a cache slot (keyword cache refs after uuid must resolve correctly)"
+    :expected {:id #uuid "00000000-0000-0000-0000-000000000001" :type :foo :other :foo}
+    :encoded  "[\"^ \",\"~:id\",\"~u00000000-0000-0000-0000-000000000001\",\"~:type\",\"~:foo\",\"~:other\",\"^2\"]"}])
 
 #?(:clj
    (defn- ct-read [s]
