@@ -14,8 +14,8 @@
     (if (or (= "~" c) (= "^" c)) (str "~" s) s)))
 
 (defn- kw-fqn [k]
-  ;; ClojureScript keywords have a .fqn field; squint keywords are plain strings ":foo"
-  (or (.-fqn k) (subs k 1)))
+  ;; ClojureScript keywords have a .fqn field; squint keywords are plain strings "foo"
+  (or (.-fqn k) k))
 
 (defn- encode-key [k]
   (cond
