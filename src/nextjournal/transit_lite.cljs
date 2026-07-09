@@ -47,9 +47,8 @@
 (defn write-str [x] (js/JSON.stringify (encode x)))
 
 (defn write-meta [x]
-  (if (implements? IMeta x)
-    (let [m (-meta ^not-native x)]
-      (if (nil? m) x (WithMeta. (-with-meta ^not-native x nil) m)))
+  (if-let [m (meta ^not-native x)]
+    (if (nil? m) x (WithMeta. (with-meta ^not-native x nil) m))
     x))
 
 ;; ---------------------------------------------------------------------------
@@ -100,13 +99,13 @@
     (cond
       (= "^ " fst)
       ;; transit map
-      (loop [i 1 ret (transient {})]
+      (loop [i 1 ret {}]
         (if (< i (.-length a))
           (recur (+ i 2)
-                 (-assoc! ret
-                         (decode-str (aget a i) cache true)
-                         (decode (aget a (+ i 1)) cache)))
-          (persistent! ret)))
+                 (assoc ret
+                        (decode-str (aget a i) cache true)
+                        (decode (aget a (+ i 1)) cache)))
+          ret))
       (and (string? fst) (= "~" (.charAt fst 0)) (= "#" (.charAt fst 1)))
       ;; tagged value encoded as array: ["~#tag", value]
       ;; cache the tag string to keep counter aligned with transit-java writer
