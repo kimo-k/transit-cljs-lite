@@ -13,9 +13,13 @@
   (let [c (.charAt s 0)]
     (if (or (= "~" c) (= "^" c)) (str "~" s) s)))
 
+(defn- kw-fqn [k]
+  ;; ClojureScript keywords have a .fqn field; squint keywords are plain strings ":foo"
+  (or (.-fqn k) (subs k 1)))
+
 (defn- encode-key [k]
   (cond
-    (keyword? k) (str "~:" (.-fqn k))
+    (keyword? k) (str "~:" (kw-fqn k))
     (string? k)  (encode-str k)
     (symbol? k)  (str "~$" (.-str k))
     :else (throw (js/Error. "transit-lite: unsupported map key"))))
@@ -26,7 +30,7 @@
     (boolean? x)           x
     (number? x)            x
     (string? x)            (encode-str x)
-    (keyword? x)           (str "~:" (.-fqn x))
+    (keyword? x)           (str "~:" (kw-fqn x))
     (symbol? x)            (str "~$" (.-str x))
     (instance? UUID x)     (str "~u" (.-uuid x))
     (vector? x)            (let [a #js []]
