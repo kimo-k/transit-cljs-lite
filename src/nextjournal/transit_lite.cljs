@@ -6,6 +6,13 @@
 
 (deftype WithMeta [value meta])
 
+(defprotocol TransitTagged
+  "Extension point for scalar tagged values. A type implementing this
+  encodes as the tagged string \"~<tag><rep>\", e.g. tag \":\" and rep
+  \"foo\" for the keyword :foo."
+  (-tag [x])
+  (-rep [x]))
+
 ;; ---------------------------------------------------------------------------
 ;; Writer
 
@@ -22,6 +29,7 @@
     (keyword? k) (str "~:" (kw-fqn k))
     (string? k)  (encode-str k)
     (symbol? k)  (str "~$" (.-str k))
+    (satisfies? TransitTagged k) (str "~" (-tag k) (-rep k))
     :else (throw (js/Error. "transit-lite: unsupported map key"))))
 
 (defn encode [x]
@@ -46,6 +54,7 @@
                              #js {"~#set" a})
     (instance? WithMeta x) #js {"~#with-meta"
                                 #js [(encode (.-value x)) (encode (.-meta x))]}
+    (satisfies? TransitTagged x) (str "~" (-tag x) (-rep x))
     :else (throw (js/Error. "transit-lite: unsupported type"))))
 
 (defn write-str [x] (js/JSON.stringify (encode x)))
@@ -64,7 +73,7 @@
 (def ^:private CACHE-SIZE 88)
 (def ^:private BASE-CHAR  48)
 
-(defn- new-cache [] #js {:d (js/Array. CACHE-SIZE) :n 0})
+(defn- new-cache [] #js {:d (js/Array. CACHE-SIZE) :n 0 :sfn nil})
 
 (defn- cache-ref? [s]
   (and (= 2 (.-length s)) (= "^" (.charAt s 0)) (not= " " (.charAt s 1))))
@@ -82,15 +91,18 @@
 (defn- decode-str [s cache as-map-key?]
   (if (cache-ref? s)
     (cache-get cache s)
-    (let [decoded (if (= "~" (.charAt s 0))
+    ;; sfn (:decode-string option) applies to plain wire strings in value
+    ;; position, so hosts without a keyword type can tell them apart
+    (let [sfn     (or (when-not as-map-key? (.-sfn cache)) identity)
+          decoded (if (= "~" (.charAt s 0))
                     (case (.charAt s 1)
                       ":" (keyword (.substring s 2))
                       "$" (symbol  (.substring s 2))
                       "u" (uuid    (.substring s 2))
-                      "~" (.substring s 1)
-                      "^" (.substring s 1)
+                      "~" (sfn (.substring s 1))
+                      "^" (sfn (.substring s 1))
                       s)
-                    s)]
+                    (sfn s))]
       (when (and (>= (.-length s) 4)
                  (or as-map-key?
                      (let [c (.charAt s 1)]
@@ -150,4 +162,10 @@
     (array? x)  (decode-array x cache)
     :else       (decode-tagged x cache)))
 
-(defn read-str [s] (decode (js/JSON.parse s) (new-cache)))
+(defn read-str
+  ([s] (read-str s nil))
+  ([s opts]
+   (let [cache (new-cache)]
+     (when-let [f (:decode-string opts)]
+       (set! (.-sfn cache) f))
+     (decode (js/JSON.parse s) cache))))
