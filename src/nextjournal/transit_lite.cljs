@@ -6,6 +6,13 @@
 
 (deftype WithMeta [value meta])
 
+(defprotocol TransitTagged
+  "Extension point for scalar tagged values. A type implementing this
+  encodes as the tagged string \"~<tag><rep>\", e.g. tag \":\" and rep
+  \"foo\" for the keyword :foo."
+  (-tag [x])
+  (-rep [x]))
+
 ;; ---------------------------------------------------------------------------
 ;; Writer
 
@@ -17,19 +24,12 @@
   ;; ClojureScript keywords have a .fqn field; squint keywords are plain strings "foo"
   (or (.-fqn k) k))
 
-(defn- kw-obj?
-  "A keyword object: any non-string carrying a string .fqn field. Lets a
-  host without a keyword type (squint) mark strings that must encode as
-  keywords."
-  [x]
-  (and (some? x) (not (string? x)) (string? (.-fqn x))))
-
 (defn- encode-key [k]
   (cond
     (keyword? k) (str "~:" (kw-fqn k))
-    (kw-obj? k)  (str "~:" (.-fqn k))
     (string? k)  (encode-str k)
     (symbol? k)  (str "~$" (.-str k))
+    (satisfies? TransitTagged k) (str "~" (-tag k) (-rep k))
     :else (throw (js/Error. "transit-lite: unsupported map key"))))
 
 (defn encode [x]
@@ -39,7 +39,6 @@
     (number? x)            x
     (string? x)            (encode-str x)
     (keyword? x)           (str "~:" (kw-fqn x))
-    (kw-obj? x)            (str "~:" (.-fqn x))
     (symbol? x)            (str "~$" (.-str x))
     (instance? UUID x)     (str "~u" (.-uuid x))
     (vector? x)            (let [a #js []]
@@ -55,6 +54,7 @@
                              #js {"~#set" a})
     (instance? WithMeta x) #js {"~#with-meta"
                                 #js [(encode (.-value x)) (encode (.-meta x))]}
+    (satisfies? TransitTagged x) (str "~" (-tag x) (-rep x))
     :else (throw (js/Error. "transit-lite: unsupported type"))))
 
 (defn write-str [x] (js/JSON.stringify (encode x)))
